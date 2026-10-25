@@ -564,6 +564,11 @@ class AbstractWorkflow(ClusterableModel):
         Initiates a workflow by creating an instance of ``WorkflowState``.
         """
 
+        # Serialize workflow starts for the same object. The active-state check
+        # in WorkflowState.clean() cannot see another transaction's uncommitted
+        # insert, and the database constraint is unavailable on MySQL.
+        obj.__class__._base_manager.select_for_update().get(pk=obj.pk)
+
         state = WorkflowState(
             content_type=obj.get_content_type(),
             base_content_type=obj.get_base_content_type(),
