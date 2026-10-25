@@ -928,6 +928,38 @@ class TestBulkFetch(TestCase):
 
 
 class TestReferenceIndex(TestCase):
+    def test_usage_count_subquery_uses_base_content_type_for_child_models(self):
+        root_page = Page.objects.get(id=2)
+        target_page = EventPage(
+            title="Target",
+            slug="target",
+            location="the moon",
+            audience="public",
+            cost="free",
+            date_from="2001-01-01",
+        )
+        root_page.add_child(instance=target_page)
+        source_page = Page(title="Source", slug="source")
+        root_page.add_child(instance=source_page)
+
+        content_path = "body.0.value"
+        ReferenceIndex.objects.create(
+            content_type=ContentType.objects.get_for_model(source_page),
+            base_content_type=ReferenceIndex._get_base_content_type(source_page),
+            object_id=str(source_page.pk),
+            to_content_type=ReferenceIndex._get_base_content_type(target_page),
+            to_object_id=str(target_page.pk),
+            model_path="body",
+            content_path=content_path,
+            content_path_hash=ReferenceIndex._get_content_path_hash(content_path),
+        )
+
+        target_with_usage = EventPage.objects.annotate(
+            usage_count=ReferenceIndex.usage_count_subquery(EventPage)
+        ).get(pk=target_page.pk)
+
+        self.assertEqual(target_with_usage.usage_count, 1)
+
     def test_target_deletion_leaves_orphan(self):
         """
         Regression test for #13632:
